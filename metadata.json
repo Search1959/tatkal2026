@@ -1,0 +1,7 @@
+{
+  "name": "Tatkal Assist Pro",
+  "description": "Smart, legitimate railway booking companion with dual-journey workspaces, precision booking countdowns, passenger master list, and IRCTC readiness checklist.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+
