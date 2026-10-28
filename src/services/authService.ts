@@ -1,11 +1,4 @@
 import { 
-  signInWithEmailAndPassword, 
-  createUserWithEmailAndPassword, 
-  signOut, 
-  onAuthStateChanged,
-  User as FirebaseUser
-} from 'firebase/auth';
-import { 
   collection, 
   doc, 
   getDoc, 
@@ -14,16 +7,23 @@ import {
   updateDoc, 
   deleteDoc, 
   query, 
+  where,
   orderBy, 
-  limit 
+  limit,
+  onSnapshot
 } from 'firebase/firestore';
-import { auth, db } from '../lib/firebase';
+import { db } from '../lib/firebase';
 import { AppUser, UserRole, UserStatus, AuditLog } from '../types';
+
+export function getUserDocId(email: string): string {
+  return 'usr_' + email.trim().toLowerCase().replace(/[^a-z0-9]/g, '_');
+}
 
 export const INITIAL_USERS: AppUser[] = [
   {
-    id: 'usr-admin-01',
+    id: 'usr_admin_tatkalassist_pro',
     email: 'admin@tatkalassist.pro',
+    password: 'Tatkal@2026',
     displayName: 'Chief System Administrator',
     role: 'admin',
     status: 'active',
@@ -31,11 +31,12 @@ export const INITIAL_USERS: AppUser[] = [
     assignedStations: ['NDLS', 'HWH', 'CSMT'],
     createdAt: '2026-10-01T08:00:00.000Z',
     createdBy: 'System Root',
-    lastLogin: 'Just now'
+    lastLogin: 'Never'
   },
   {
-    id: 'usr-operator-01',
+    id: 'usr_operator_tatkalassist_pro',
     email: 'operator@tatkalassist.pro',
+    password: 'Tatkal@2026',
     displayName: 'Vikram Joshi (Senior Desk)',
     role: 'operator',
     status: 'active',
@@ -43,18 +44,20 @@ export const INITIAL_USERS: AppUser[] = [
     assignedStations: ['NDLS', 'BSB'],
     createdAt: '2026-10-15T09:30:00.000Z',
     createdBy: 'admin@tatkalassist.pro',
-    lastLogin: '2026-10-27T08:15:00.000Z'
+    lastLogin: 'Never'
   },
   {
-    id: 'usr-passenger-01',
+    id: 'usr_passenger_tatkalassist_pro',
     email: 'passenger@tatkalassist.pro',
+    password: 'Tatkal@2026',
     displayName: 'Arun Sharma (Personal)',
     role: 'passenger',
     status: 'active',
     department: 'Consumer Retail Booking',
+    assignedStations: ['NDLS', 'HWH'],
     createdAt: '2026-10-20T11:00:00.000Z',
     createdBy: 'Self Registered',
-    lastLogin: '2026-10-27T09:00:00.000Z'
+    lastLogin: 'Never'
   }
 ];
 
@@ -65,37 +68,64 @@ export const INITIAL_AUDIT_LOGS: AuditLog[] = [
     targetUserEmail: 'admin@tatkalassist.pro',
     performedBy: 'System Engine',
     timestamp: '2026-10-01T08:00:00.000Z',
-    details: 'Initial root system administrator provisioned'
-  },
-  {
-    id: 'log-002',
-    action: 'USER_CREATED',
-    targetUserEmail: 'operator@tatkalassist.pro',
-    performedBy: 'admin@tatkalassist.pro',
-    timestamp: '2026-10-15T09:30:00.000Z',
-    details: 'Provisioned desk operator Vikram Joshi with access to NDLS & BSB'
+    details: 'Initial root system administrator provisioned on cloud'
   }
 ];
 
-// Helper to seed initial admin record in Firestore
-export async function bootstrapSystemAdmin(user: AppUser) {
+// Subscribe in real-time to Firestore users collection
+export function subscribeToUsers(onUpdate: (users: AppUser[]) => void, onError?: (err: any) => void) {
   try {
-    const adminDocRef = doc(db, 'admins', user.id);
-    await setDoc(adminDocRef, {
-      uid: user.id,
-      email: user.email,
-      grantedAt: new Date().toISOString(),
-      grantedBy: 'system'
-    }, { merge: true });
-
-    const userDocRef = doc(db, 'users', user.id);
-    await setDoc(userDocRef, user, { merge: true });
+    const colRef = collection(db, 'users');
+    return onSnapshot(colRef, (snapshot) => {
+      if (!snapshot.empty) {
+        const users: AppUser[] = [];
+        snapshot.forEach(docSnap => {
+          users.push(docSnap.data() as AppUser);
+        });
+        // Cache to localStorage
+        try {
+          localStorage.setItem('tatkal_users_directory', JSON.stringify(users));
+        } catch {}
+        onUpdate(users);
+      }
+    }, (err) => {
+      console.warn('Real-time users snapshot error:', err);
+      if (onError) onError(err);
+    });
   } catch (err) {
-    console.warn('Bootstrap admin sync notice:', err);
+    console.warn('Could not establish real-time snapshot:', err);
+    return () => {};
   }
 }
 
-// Fetch all users from Firestore with local fallback
+// Fetch single user by email directly from cloud Firestore (crucial for mobile login!)
+export async function fetchUserByEmailFromFirestore(email: string): Promise<AppUser | null> {
+  const trimmed = email.trim().toLowerCase();
+  const directDocId = getUserDocId(trimmed);
+
+  try {
+    // 1. Try direct doc ID lookup
+    const directDoc = await getDoc(doc(db, 'users', directDocId));
+    if (directDoc.exists()) {
+      return directDoc.data() as AppUser;
+    }
+
+    // 2. Fallback to query by email field
+    const q = query(collection(db, 'users'), where('email', '==', trimmed), limit(1));
+    const querySnap = await getDocs(q);
+    if (!querySnap.empty) {
+      return querySnap.docs[0].data() as AppUser;
+    }
+  } catch (err) {
+    console.warn('Direct Firestore user lookup failed:', err);
+  }
+
+  // Fallback to initial seed accounts
+  const seedMatch = INITIAL_USERS.find(u => u.email.toLowerCase() === trimmed);
+  return seedMatch || null;
+}
+
+// Fetch all users from Firestore with fallback
 export async function fetchUsersFromFirestore(): Promise<AppUser[]> {
   try {
     const snapshot = await getDocs(collection(db, 'users'));
@@ -104,24 +134,47 @@ export async function fetchUsersFromFirestore(): Promise<AppUser[]> {
       snapshot.forEach(docSnap => {
         users.push(docSnap.data() as AppUser);
       });
+      try {
+        localStorage.setItem('tatkal_users_directory', JSON.stringify(users));
+      } catch {}
       return users;
     }
   } catch (err) {
-    console.warn('Could not fetch from Firestore, using local cache:', err);
+    console.warn('Could not fetch from Firestore, checking local cache:', err);
   }
 
-  // Load from localStorage cache
   try {
     const cached = localStorage.getItem('tatkal_users_directory');
     if (cached) return JSON.parse(cached);
-  } catch {
-    // fallback
-  }
+  } catch {}
 
   return INITIAL_USERS;
 }
 
-// Fetch audit logs
+// Persist or update a user document in Firestore
+export async function saveUserToFirestore(user: AppUser): Promise<void> {
+  const docId = user.id || getUserDocId(user.email);
+  const userWithId = { ...user, id: docId };
+  
+  await setDoc(doc(db, 'users', docId), userWithId, { merge: true });
+
+  if (user.role === 'admin') {
+    await setDoc(doc(db, 'admins', docId), {
+      uid: docId,
+      email: user.email,
+      grantedAt: new Date().toISOString(),
+      grantedBy: user.createdBy || 'admin'
+    }, { merge: true });
+  }
+}
+
+// Delete user from Firestore
+export async function deleteUserFromFirestore(userId: string): Promise<void> {
+  await deleteDoc(doc(db, 'users', userId));
+  await deleteDoc(doc(db, 'admins', userId)).catch(() => {});
+}
+
+// Fetch audit logs from Firestore
 export async function fetchAuditLogsFromFirestore(): Promise<AuditLog[]> {
   try {
     const snapshot = await getDocs(query(collection(db, 'audit_logs'), orderBy('timestamp', 'desc'), limit(50)));
@@ -139,14 +192,12 @@ export async function fetchAuditLogsFromFirestore(): Promise<AuditLog[]> {
   try {
     const cached = localStorage.getItem('tatkal_audit_logs');
     if (cached) return JSON.parse(cached);
-  } catch {
-    // fallback
-  }
+  } catch {}
 
   return INITIAL_AUDIT_LOGS;
 }
 
-// Record an audit log
+// Record an audit log into Firestore
 export async function logAdminAction(
   action: string,
   targetUserEmail: string,
@@ -154,7 +205,7 @@ export async function logAdminAction(
   details: string
 ): Promise<AuditLog> {
   const newLog: AuditLog = {
-    id: `log-${Date.now()}`,
+    id: `log-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
     action,
     targetUserEmail,
     performedBy,
@@ -170,10 +221,8 @@ export async function logAdminAction(
 
   try {
     const existing = JSON.parse(localStorage.getItem('tatkal_audit_logs') || '[]');
-    localStorage.setItem('tatkal_audit_logs', JSON.stringify([newLog, ...existing]));
-  } catch {
-    // ignore
-  }
+    localStorage.setItem('tatkal_audit_logs', JSON.stringify([newLog, ...existing.slice(0, 49)]));
+  } catch {}
 
   return newLog;
 }

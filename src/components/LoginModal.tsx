@@ -9,7 +9,7 @@ interface LoginModalProps {
 }
 
 export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onShowToast }) => {
-  const { login, quickSwitchUser, currentUser } = useAuth();
+  const { login, quickSwitchUser, currentUser, allUsers } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('Tatkal@2026');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -38,18 +38,31 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onShowT
     }
   };
 
-  const handleQuickLogin = async (targetEmail: string, roleName: string) => {
+  const handleQuickLogin = async (targetEmail: string, roleName: string, userPassword?: string) => {
+    setEmail(targetEmail);
+    if (userPassword) {
+      setPassword(userPassword);
+    }
     setIsSubmitting(true);
-    await quickSwitchUser(targetEmail);
+    const result = await login(targetEmail, userPassword || password);
     setIsSubmitting(false);
-    onShowToast(`Signed in as ${roleName} (${targetEmail})`, 'success');
-    onClose();
+    if (result.success) {
+      onShowToast(`Signed in as ${roleName} (${targetEmail})`, 'success');
+      onClose();
+    } else {
+      setErrorMsg(result.error || 'Login failed.');
+    }
   };
+
+  // Find custom accounts created by admin
+  const customUsers = allUsers.filter(
+    u => !['admin@tatkalassist.pro', 'operator@tatkalassist.pro', 'passenger@tatkalassist.pro'].includes(u.email)
+  );
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs">
       <div 
-        className="w-full max-w-md bg-white rounded-2xl border border-slate-200 shadow-2xl overflow-hidden flex flex-col"
+        className="w-full max-w-md bg-white rounded-2xl border border-slate-200 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
@@ -63,7 +76,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onShowT
                 User Authentication & Login
               </h3>
               <p className="text-xs text-slate-400">
-                Secure access with Role-Based Access Control
+                Cloud-Synced: Access from mobile, desktop, or anywhere
               </p>
             </div>
           </div>
@@ -76,7 +89,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onShowT
         </div>
 
         {/* Content */}
-        <div className="p-6 space-y-4">
+        <div className="p-6 space-y-4 overflow-y-auto flex-1">
           {errorMsg && (
             <div className="flex items-center gap-2 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs">
               <AlertCircle className="w-4 h-4 shrink-0" />
@@ -84,47 +97,78 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onShowT
             </div>
           )}
 
+          {/* Cloud Synchronization Notice */}
+          <div className="p-3 bg-emerald-50/80 border border-emerald-200/90 rounded-xl text-xs flex items-start gap-2.5">
+            <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+            <div className="text-emerald-950 leading-relaxed text-[11px]">
+              <span className="font-bold text-emerald-900">Cross-Device Cloud Sync Active: </span>
+              Accounts created by System Admin are stored in Firestore and can be accessed from any phone, tablet, or PC worldwide.
+            </div>
+          </div>
+
           {/* Quick Demo Credentials Switcher */}
           <div className="space-y-2">
             <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
-              1-Click Fast Switch Demo Accounts
+              1-Click Fast Switch Accounts ({allUsers.length} in Cloud DB)
             </span>
-            <div className="grid grid-cols-1 gap-1.5">
+            <div className="grid grid-cols-1 gap-1.5 max-h-48 overflow-y-auto pr-1">
+              {/* Default accounts */}
               <button
                 type="button"
-                onClick={() => handleQuickLogin('admin@tatkalassist.pro', 'Chief System Administrator')}
+                onClick={() => handleQuickLogin('admin@tatkalassist.pro', 'Chief System Administrator', 'Tatkal@2026')}
                 className="flex items-center justify-between p-2.5 rounded-xl border border-indigo-200 bg-indigo-50/70 hover:bg-indigo-100 text-left transition-colors text-xs"
               >
                 <div>
-                  <div className="font-bold text-indigo-950">System Administrator</div>
-                  <div className="text-[11px] text-indigo-700">admin@tatkalassist.pro (Full Access)</div>
+                  <div className="font-bold text-indigo-950">Chief System Administrator</div>
+                  <div className="text-[11px] text-indigo-700 font-mono">admin@tatkalassist.pro · Full Admin</div>
                 </div>
                 <ArrowRight className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
               </button>
 
               <button
                 type="button"
-                onClick={() => handleQuickLogin('operator@tatkalassist.pro', 'Rail Desk Operator')}
+                onClick={() => handleQuickLogin('operator@tatkalassist.pro', 'Rail Desk Operator', 'Tatkal@2026')}
                 className="flex items-center justify-between p-2.5 rounded-xl border border-blue-200 bg-blue-50/70 hover:bg-blue-100 text-left transition-colors text-xs"
               >
                 <div>
-                  <div className="font-bold text-blue-950">Rail Desk Operator</div>
-                  <div className="text-[11px] text-blue-700">operator@tatkalassist.pro (Operations)</div>
+                  <div className="font-bold text-blue-950">Vikram Joshi (Senior Desk)</div>
+                  <div className="text-[11px] text-blue-700 font-mono">operator@tatkalassist.pro · Operator</div>
                 </div>
                 <ArrowRight className="w-3.5 h-3.5 text-blue-600 shrink-0" />
               </button>
 
               <button
                 type="button"
-                onClick={() => handleQuickLogin('passenger@tatkalassist.pro', 'Regular Passenger')}
+                onClick={() => handleQuickLogin('passenger@tatkalassist.pro', 'Regular Passenger', 'Tatkal@2026')}
                 className="flex items-center justify-between p-2.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-left transition-colors text-xs"
               >
                 <div>
-                  <div className="font-bold text-slate-900">Registered Passenger</div>
-                  <div className="text-[11px] text-slate-500">passenger@tatkalassist.pro (Personal)</div>
+                  <div className="font-bold text-slate-900">Arun Sharma (Personal)</div>
+                  <div className="text-[11px] text-slate-500 font-mono">passenger@tatkalassist.pro · Passenger</div>
                 </div>
                 <ArrowRight className="w-3.5 h-3.5 text-slate-500 shrink-0" />
               </button>
+
+              {/* Custom Admin-Created Accounts */}
+              {customUsers.map(u => (
+                <button
+                  key={u.id}
+                  type="button"
+                  onClick={() => handleQuickLogin(u.email, u.displayName, u.password)}
+                  className="flex items-center justify-between p-2.5 rounded-xl border border-emerald-200 bg-emerald-50/70 hover:bg-emerald-100 text-left transition-colors text-xs"
+                >
+                  <div>
+                    <div className="font-bold text-emerald-950 flex items-center gap-1.5">
+                      <span>{u.displayName}</span>
+                      <span className="text-[9px] font-mono px-1.5 py-0.2 bg-emerald-200/80 text-emerald-900 rounded font-semibold uppercase">
+                        {u.role}
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-emerald-700 font-mono">{u.email}</div>
+                  </div>
+                  <ArrowRight className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                </button>
+              ))}
             </div>
           </div>
 

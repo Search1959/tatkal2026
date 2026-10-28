@@ -286,7 +286,13 @@ export const AdminConsoleView: React.FC<AdminConsoleViewProps> = ({
                                   </span>
                                 )}
                               </div>
-                              <div className="text-slate-500 text-[11px] font-mono">{user.email}</div>
+                              <div className="text-slate-500 text-[11px] font-mono flex items-center gap-1.5 mt-0.5">
+                                <span>{user.email}</span>
+                                <span className="text-[10px] text-slate-400">·</span>
+                                <span className="text-[10px] font-mono text-indigo-700 bg-indigo-50 px-1.5 py-0.2 rounded border border-indigo-100">
+                                  PW: {user.password || 'Tatkal@2026'}
+                                </span>
+                              </div>
                               {user.department && (
                                 <div className="text-[10px] text-slate-400 mt-0.5">{user.department}</div>
                               )}

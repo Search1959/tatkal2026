@@ -72,7 +72,7 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({
     setIsSubmitting(false);
 
     if (result.success) {
-      onShowToast(`Successfully created ${role.toUpperCase()} account for ${displayName}!`, 'success');
+      onShowToast(`Created ${role.toUpperCase()} account for ${displayName} (Password: ${password})! Accessible on mobile & desktop worldwide.`, 'success');
       onClose();
       // Reset form
       setDisplayName('');
@@ -277,13 +277,13 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({
           )}
 
           {/* Security & Firestore Notice */}
-          <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs space-y-1">
-            <div className="flex items-center gap-1.5 font-bold text-slate-800 text-[11px]">
-              <Shield className="w-3.5 h-3.5 text-emerald-600" />
-              <span>Database Persistence Guarantee</span>
+          <div className="p-3 bg-indigo-50/70 border border-indigo-200 rounded-xl text-xs space-y-1">
+            <div className="flex items-center gap-1.5 font-bold text-indigo-950 text-[11px]">
+              <Shield className="w-3.5 h-3.5 text-indigo-600" />
+              <span>Cloud Persistence Across All Devices</span>
             </div>
-            <p className="text-[11px] text-slate-500 leading-relaxed">
-              New user record will be provisioned directly into Firebase Firestore with hardened RBAC authorization and logged in audit trails.
+            <p className="text-[11px] text-indigo-900/80 leading-relaxed">
+              This account is saved directly into the live Cloud Firestore database. It is immediately accessible from mobile phones, tablets, or desktop browsers anywhere over the internet.
             </p>
           </div>
 
